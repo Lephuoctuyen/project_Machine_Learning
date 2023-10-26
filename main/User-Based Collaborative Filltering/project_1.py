@@ -106,3 +106,147 @@ df = pd.merge(df_rating, df_movies, on='movieId', how='inner')
 
 # Take a look at the data
 df.head()
+
+"""# Exploratory Data Analysis (EDA)"""
+
+agg_ratings = df.groupby('title').agg(mean_rating = ('rating', 'mean'),
+                                                number_of_ratings = ('rating', 'count')).reset_index()
+
+# Keep the movies with over 100 ratings
+agg_ratings_GT100 = agg_ratings[agg_ratings['number_of_ratings']>100]
+agg_ratings_GT100.info()
+
+agg_ratings_GT100.sort_values(by='number_of_ratings', ascending=False).head()
+
+"""Trực quan (Visualization)"""
+
+sns.jointplot(x='mean_rating', y='number_of_ratings', data=agg_ratings_GT100)
+
+# Merge data
+df_GT100 = pd.merge(df, agg_ratings_GT100[['title']], on='title', how='inner')
+df_GT100.info()
+
+# Number of users
+print('The ratings dataset has', df_GT100['userId'].nunique(), 'unique users')
+
+# Number of movies
+print('The ratings dataset has', df_GT100['movieId'].nunique(), 'unique movies')
+
+# Number of ratings
+print('The ratings dataset has', df_GT100['rating'].nunique(), 'unique ratings')
+
+# List of unique ratings
+print('The unique ratings are', sorted(df_GT100['rating'].unique()))
+
+"""# Create User-Movie Matrix
+
+we will transform the dataset into a matrix format. The rows of the matrix are users, and the columns of the matrix are movies. The value of the matrix is the user rating of the movie if there is a rating. Otherwise, it shows 'NaN'.
+"""
+
+# Create user-item matrix
+matrix = df_GT100.pivot_table(index='userId', columns='title', values='rating')
+matrix.head()
+
+"""# Data Normalization"""
+
+# Normalize user-item matrix
+matrix_norm = matrix.subtract(matrix.mean(axis=1), axis = 'rows')
+matrix_norm.head()
+
+matrix_norm= matrix_norm.reset_index()
+
+matrix_norm.userId = matrix_norm.userId - 1
+
+matrix_norm= matrix_norm.set_index("userId")
+
+# User similarity matrix using Pearson correlation
+user_similarity = matrix_norm.T.corr()
+user_similarity.head()
+
+# way diffrence
+# User similarity matrix using cosine similarity
+user_similarity_cosine = cosine_similarity(matrix_norm.fillna(0))
+user_similarity_cosine
+
+# Pick a user ID
+picked_userid = 1
+
+# Remove picked user ID from the candidate list
+user_similarity.drop(index=picked_userid, inplace=True)
+
+# Take a look at the data
+user_similarity.head()
+
+# Number of similar users
+n = 10
+
+# User similarity threashold
+user_similarity_threshold = 0.3
+
+# Get top n similar users
+similar_users = user_similarity[user_similarity[picked_userid]>user_similarity_threshold][picked_userid].sort_values(ascending=False)[:n]
+
+# Print out top n similar users
+print(f'The similar users for user {picked_userid} are', similar_users)
+
+"""# Narrow Down Item Pool
+
+Các phim mà người dùng 1 đã xem
+"""
+
+# Movies that the target user has watched
+picked_userid_watched = matrix_norm[matrix_norm.index == picked_userid].dropna(axis=1, how='all')
+picked_userid_watched
+
+"""Để chỉ giữ lại phim của những người dùng tương tự, chúng tôi giữ ID người dùng trong 10 danh sách người dùng tương tự hàng đầu và xóa phim có tất cả giá trị bị thiếu. Tất cả giá trị còn thiếu của một bộ phim có nghĩa là không có người dùng tương tự nào đã xem phim đó."""
+
+
+
+# Movies that similar users watched. Remove movies that none of the similar users have watched
+# lọc các id ở matrix_norm có trong similar_users
+similar_user_movies = matrix_norm[matrix_norm.index.isin(similar_users.index)].dropna(axis=1, how='all')
+similar_user_movies
+
+"""Xóa bộ phim mà người cần dự doán đã xem"""
+
+# Remove the watched movie from the movie list
+similar_user_movies.drop(picked_userid_watched.columns,axis=1, inplace=True, errors='ignore')
+
+# Take a look at the data
+similar_user_movies
+
+"""# Recommend Items"""
+
+# A dictionary to store item scores
+item_score = {}
+
+# Loop through items
+for i in similar_user_movies.columns:
+  # Get the ratings for movie i
+  movie_rating = similar_user_movies[i]
+  # Create a variable to store the score
+  total = 0
+  # Create a variable to store the number of scores
+  count = 0
+  # Loop through similar users
+  for u in similar_users.index:
+    # If the movie has rating
+    if pd.isna(movie_rating[u]) == False:
+      # Score is the sum of user similarity score multiply by the movie rating
+      score = similar_users[u] * movie_rating[u]
+      # Add the score to the total score for the movie so far
+      total += score
+      # Add 1 to the count
+      count +=1
+  # Get the average score for the item
+  item_score[i] = total / count
+
+# Convert dictionary to pandas dataframe
+item_score = pd.DataFrame(item_score.items(), columns=['movie', 'movie_score'])
+
+# Sort the movies by score
+ranked_item_score = item_score.sort_values(by='movie_score', ascending=False)
+
+# Select top m movies
+m = 10
+ranked_item_score.head(m)
