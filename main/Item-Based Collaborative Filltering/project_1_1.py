@@ -35,7 +35,6 @@ Mà cố tím ở vùng ôn đới không biết dứa là quả và cũng chưa
 Hệ thống này khuyến khích dứa cho cô tím
 """
 
-!pip install surprise
 
 # Commented out IPython magic to ensure Python compatibility.
 # %matplotlib inline
@@ -45,16 +44,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
 from ast import literal_eval
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.metrics.pairwise import linear_kernel, cosine_similarity
-from nltk.stem.snowball import SnowballStemmer
-from nltk.stem.wordnet import WordNetLemmatizer
-from nltk.corpus import wordnet
-from surprise import Reader, Dataset, SVD
 
 import warnings; warnings.simplefilter('ignore')
 
-!pip install opendatasets
 
 import opendatasets as od
 
